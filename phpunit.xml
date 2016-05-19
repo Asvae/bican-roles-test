@@ -15,10 +15,8 @@
     </testsuites>
     <filter>
         <whitelist processUncoveredFilesFromWhitelist="true">
-            <directory suffix=".php">./app</directory>
-            <exclude>
-                <file>./app/Http/routes.php</file>
-            </exclude>
+            <directory suffix=".php">./vendor/bican/roles</directory>
+            <file>./vendor/autoload.php</file>
         </whitelist>
     </filter>
     <php>
