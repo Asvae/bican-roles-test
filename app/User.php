@@ -2,10 +2,13 @@
 
 namespace App;
 
+use Bican\Roles\Traits\HasRoleAndPermission;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
 class User extends Authenticatable
 {
+    use HasRoleAndPermission;
+
     /**
      * The attributes that are mass assignable.
      *
