@@ -10,6 +10,8 @@ before_script:
   - cp .env.travis .env
   - mysql -e 'create database travis;'
   - travis_retry composer self-update
+  - php artisan vendor:publish --provider="Bican\Roles\RolesServiceProvider" --tag=config
+  - php artisan vendor:publish --provider="Bican\Roles\RolesServiceProvider" --tag=migrations
   - php artisan migrate
 
 install:
