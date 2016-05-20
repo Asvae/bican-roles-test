@@ -8,8 +8,8 @@ test the thing.
 
 Tests are handled by [travis-ci](https://travis-ci.org/Asvae/bican-roles-test).
 
-bican/roles: [packagist](https://packagist.org/packages/bican/roles),
-[github](https://github.com/romanbican/roles)
+Tested package on [packagist](https://packagist.org/packages/bican/roles) and
+[github](https://github.com/romanbican/roles).
 
 ## License
 
