@@ -59,12 +59,17 @@ class HasRoleAndPermissionTest extends TestCase
                 'slug' => 'see.page',
             ]),
             'be.banned'  => Permission::create([
-                'name' => 'Be banned',
-                'slug' => 'be.banned',
+                'name'  => 'Be banned',
+                'slug'  => 'be.banned',
+                'model' => \App\User::class,
             ]),
             'exacerbate' => Permission::create([
                 'name' => 'Exacerbate',
                 'slug' => 'exacerbate',
+            ]),
+            'unused'     => Permission::create([
+                'name' => 'Unused',
+                'slug' => 'unused',
             ]),
         ];
 
@@ -72,7 +77,7 @@ class HasRoleAndPermissionTest extends TestCase
         $this->roles['editor']->attachPermission($this->permissions['be.banned']);
 
         $this->user->userPermissions()->attach($this->permissions['exacerbate']);
-        
+
         $this->user->attachRole($this->roles['admin']);
         $this->user->attachRole($this->roles['editor']);
 
@@ -105,24 +110,28 @@ class HasRoleAndPermissionTest extends TestCase
         $this->assertTrue($this->user->isOne($this->roles['admin']->slug));
         $this->assertTrue($this->user->isOne($this->roles['admin']->id));
         $this->assertTrue($this->user->isOne($this->roles['admin']));
-        $this->assertFalse($this->user->isOne($this->roles['manager']));
+        $this->assertFalse($this->user->isOne('manager'));
 
-        $this->assertTrue($this->user->isAll([$this->roles['admin'], $this->roles['editor']]));
-        $this->assertTrue($this->user->isAll([$this->roles['editor']]));
-        $this->assertFalse($this->user->isAll([$this->roles['editor'], $this->roles['manager']]));
-        $this->assertFalse($this->user->isAll($this->roles['manager']));
+        $this->assertTrue($this->user->isAll('admin|editor'));
+        $this->assertTrue($this->user->isAll('editor'));
+        $this->assertFalse($this->user->isAll('editor, manager'));
+        $this->assertFalse($this->user->isAll(['manager']));
     }
 
     /**
      * @covers ::is
      */
-    public function test_user_pretends()
+    public function test_user_pretends_role()
     {
         Config::set('roles.pretend.enabled', false);
-        $this->assertFalse($this->user->is($this->roles['manager']->slug));
+        $this->assertFalse($this->user->is('manager'));
 
         Config::set('roles.pretend.enabled', true);
-        $this->assertTrue($this->user->is($this->roles['admin']->slug));
+        $this->assertTrue($this->user->is('manager'));
+
+        $this->assertTrue($this->user->is('admin'));
+        Config::set('roles.pretend.options.is', false);
+        $this->assertFalse($this->user->is('admin'));
     }
 
     /**
@@ -156,8 +165,8 @@ class HasRoleAndPermissionTest extends TestCase
         $user->roles()->attach($roles);
         $user->detachRole($this->roles['admin']);
 
-        $this->assertTrue($user->is($this->roles['manager']));
-        $this->assertFalse($user->is($this->roles['admin']));
+        $this->assertTrue($user->is('manager'));
+        $this->assertFalse($user->is('admin'));
 
         $user->detachAllRoles();
         $this->assertEmpty($user->roles);
@@ -182,6 +191,16 @@ class HasRoleAndPermissionTest extends TestCase
     }
 
     /**
+     * @expectedException InvalidArgumentException
+     * @covers ::rolePermissions
+     */
+    public function test_cant_set_not_model_as_permission_in_config()
+    {
+        Config::set('roles.models.permission', 'config');
+        $this->user->rolePermissions();
+    }
+
+    /**
      * @covers ::userPermissions
      */
     public function test_has_user_permissions_relation()
@@ -195,5 +214,142 @@ class HasRoleAndPermissionTest extends TestCase
     public function test_gets_user_and_roles_permissions()
     {
         $this->assertEquals(3, $this->user->getPermissions()->count());
+    }
+
+    /**
+     * @covers ::can
+     *
+     * @covers ::getMethodName
+     * @covers ::pretend
+     * @covers ::isPretendEnabled
+     */
+    public function test_can_pretend_permission()
+    {
+        Config::set('roles.pretend.enabled', false);
+        $this->assertFalse($this->user->can('unused'));
+
+        Config::set('roles.pretend.enabled', true);
+        $this->assertTrue($this->user->can('unused'));
+
+        $this->assertTrue($this->user->can('admin'));
+        Config::set('roles.pretend.options.can', false);
+        $this->assertFalse($this->user->can('admin'));
+    }
+
+    /**
+     * @covers ::canOne
+     * @covers ::canAll
+     * @covers ::hasPermission
+     *
+     * @covers ::getArrayFrom
+     */
+    public function test_checks_if_user_has_permission()
+    {
+        $this->assertTrue($this->user->canOne($this->permissions['see.page']->slug));
+        $this->assertTrue($this->user->canOne($this->permissions['see.page']->id));
+        $this->assertTrue($this->user->canOne($this->permissions['see.page']));
+        $this->assertFalse($this->user->canOne('unused'));
+
+        $this->assertTrue($this->user->canAll('see.page|be.banned'));
+        $this->assertTrue($this->user->canAll('see.page'));
+        $this->assertFalse($this->user->canAll('see.page, unused'));
+        $this->assertFalse($this->user->canAll(['unused']));
+    }
+
+    /**
+     * @covers ::allowed
+     * @covers ::isAllowed
+     */
+    public function test_user_is_allowed_depending_on_rules()
+    {
+        $this->assertTrue($this->user->allowed('be.banned', $this->user));
+        $this->assertFalse($this->user->allowed('see.page', $this->user));
+    }
+
+    /**
+     * @covers ::allowed
+     * @covers ::isAllowed
+     */
+    public function test_user_is_allowed_depending_on_ownership()
+    {
+        $user = \App\User::create(['name' => 'name2', 'email' => 'email2@email.com']);
+        $this->assertTrue($user->allowed('be.banned', $user, true, 'id'));
+        $this->assertFalse($user->allowed('be.banned', $this->user, true, 'id'));
+    }
+
+    /**
+     * @covers ::allowed
+     * @covers ::isAllowed
+     */
+    public function test_user_allowed_could_be_pretended()
+    {
+        Config::set('roles.pretend.enabled', false);
+        $this->assertFalse($this->user->allowed('see.page', $this->user));
+        Config::set('roles.pretend.enabled', true);
+        $this->assertTrue($this->user->allowed('see.page', $this->user));
+    }
+
+    /**
+     * @covers ::attachPermission
+     */
+    public function test_attaches_permissions()
+    {
+        $user = \App\User::create([
+            'name'  => 'Name',
+            'email' => 'some2@email.com',
+        ]);
+
+        $this->assertNull($user->attachPermission($this->permissions['be.banned']));
+        $user = $user->fresh('userPermissions');
+        $this->assertNull($user->attachPermission($this->permissions['see.page']));
+        $this->assertTrue($user->attachPermission($this->permissions['be.banned']));
+    }
+
+    /**
+     * @covers ::detachPermission
+     * @covers ::detachAllPermissions
+     */
+    public function test_detaches_permissions()
+    {
+        $user = \App\User::create([
+            'name'  => 'Name',
+            'email' => 'some2@email.com',
+        ]);
+
+        $roles = Permission::whereIn('slug', ['be.banned', 'see.page'])->get();
+        $user->userPermissions()->attach($roles);
+        $user->detachPermission($this->permissions['see.page']);
+
+        $this->assertTrue($user->can('be.banned'));
+        $this->assertFalse($user->can('see.page'));
+
+        $user->detachAllPermissions();
+        $this->assertEmpty($user->userPermissions);
+    }
+
+    /**
+     * @covers ::__call
+     */
+    public function test_magic_call()
+    {
+        $this->assertTrue($this->user->isAdmin());
+        $this->assertFalse($this->user->isManager());
+
+        $this->assertTrue($this->user->canBeBanned());
+        $this->assertFalse($this->user->canUnused());
+
+        $this->assertTrue($this->user->allowedBeBanned($this->user));
+        $this->assertFalse($this->user->allowedUnused($this->user));
+
+        $user = \App\User::create(['name' => 'name2', 'email' => 'email2@email.com']);
+        $this->assertTrue($user->allowedBeBanned($user, true, 'id'));
+    }
+
+    /**
+     * @covers ::__call
+     */
+    public function test_parent_call_works()
+    {
+        $this->user->getBindings();
     }
 }
